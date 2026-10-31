@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>ANT BMS Cells</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #15181d; --muted: #6b7280; --line: #e3e6ea;
+    --bar: #3b82f6; --hi: #e5484d; --lo: #f59e0b; --ok: #16a34a; --btn: #15181d; --btn-text: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --card: #181b21; --text: #eef0f3; --muted: #9aa3ae; --line: #2a2f37;
+      --bar: #4f8ff7; --hi: #ff6b6f; --lo: #fbbf24; --ok: #22c55e; --btn: #eef0f3; --btn-text: #0f1115;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1115; --card: #181b21; --text: #eef0f3; --muted: #9aa3ae; --line: #2a2f37;
+    --bar: #4f8ff7; --hi: #ff6b6f; --lo: #fbbf24; --ok: #22c55e; --btn: #eef0f3; --btn-text: #0f1115;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  h1 { font-size: 20px; margin: 0; flex: 1; }
+  #status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  #dot.on { background: var(--ok); }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 10px 16px;
+    background: var(--btn); color: var(--btn-text); cursor: pointer;
+  }
+  button:disabled { opacity: .5; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .tile .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .v small { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .row { display: grid; grid-template-columns: 26px 62px 1fr 52px; align-items: center; gap: 8px;
+         padding: 4px 0; font-variant-numeric: tabular-nums; }
+  .row .n { color: var(--muted); font-size: 13px; text-align: right; }
+  .row .mv { font-weight: 600; }
+  .row .d { font-size: 12px; color: var(--muted); text-align: right; }
+  .track { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+  .fill { height: 100%; background: var(--bar); border-radius: 5px; transition: width .3s; }
+  .row.hi .fill { background: var(--hi); } .row.hi .mv { color: var(--hi); }
+  .row.lo .fill { background: var(--lo); } .row.lo .mv { color: var(--lo); }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+  .meta b { color: var(--text); font-weight: 600; }
+  #msg { font-size: 14px; color: var(--muted); }
+  #msg.err { color: var(--hi); }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ANT BMS</h1>
+    <div id="status"><span id="dot"></span><span id="state">Disconnected</span></div>
+    <button id="connect">Connect</button>
+  </header>
+
+  <div class="card" id="intro">
+    <div id="msg">Tap Connect and choose your ANT-BLE device. Readings refresh every few seconds.</div>
+  </div>
+
+  <div id="data" hidden>
+    <div class="card tiles">
+      <div class="tile"><div class="k">Pack</div><div class="v" id="pv">–</div></div>
+      <div class="tile"><div class="k">Charge</div><div class="v" id="soc">–</div></div>
+      <div class="tile"><div class="k">Current</div><div class="v" id="cur">–</div></div>
+      <div class="tile"><div class="k">Power</div><div class="v" id="pwr">–</div></div>
+      <div class="tile"><div class="k">Cell spread</div><div class="v" id="delta">–</div></div>
+      <div class="tile"><div class="k">Remaining</div><div class="v" id="cap">–</div></div>
+    </div>
+
+    <div class="card">
+      <div class="legend">
+        <span><i style="background:var(--hi)"></i>Highest</span>
+        <span><i style="background:var(--lo)"></i>Lowest</span>
+        <span>± = mV from average</span>
+      </div>
+      <div id="cells"></div>
+    </div>
+
+    <div class="card meta" id="meta"></div>
+  </div>
+</main>
+
+<script>
+// ---- Legacy ANT BMS protocol ----
+// Write DB DB 00 00 00 00 to FFE1; the BMS replies with a 140-byte frame (AA 55 AA FF ...)
+// delivered as ~20-byte notifications. The BMS drops the link after ~30 s without a request.
+const SERVICE = 0xffe0, CHAR = 0xffe1;
+const STATUS_REQ = new Uint8Array([0xdb, 0xdb, 0x00, 0x00, 0x00, 0x00]);
+const FRAME_LEN = 140, POLL_MS = 3000;
+
+function parseFrame(f) {
+  const dv = new DataView(f.buffer, f.byteOffset, f.byteLength);
+  let sum = 0;
+  for (let i = 4; i < 138; i++) sum += f[i];
+  if ((sum & 0xffff) !== dv.getUint16(138)) return null;
+  const count = Math.min(f[123], 32);
+  const cells = [];
+  for (let n = 0; n < count; n++) cells.push(dv.getUint16(6 + 2 * n) / 1000);
+  const temps = [];
+  for (let i = 0; i < 6; i++) temps.push(dv.getInt16(91 + 2 * i));
+  return {
+    packV: dv.getUint16(4) / 10,
+    cells,
+    current: dv.getInt32(70) / 10,
+    soc: f[74],
+    capacityAh: dv.getUint32(75) / 1e6,
+    remainingAh: dv.getUint32(79) / 1e6,
+    temps,
+    chargeFet: f[103],
+    dischargeFet: f[104],
+    balancer: f[105],
+    power: dv.getInt32(111),
+  };
+}
+
+// ---- BLE ----
+let device = null, chr = null, pollTimer = null, buf = new Uint8Array(0), lastFrameAt = 0, wantConnected = false;
+const $ = id => document.getElementById(id);
+
+function setState(text, on) { $('state').textContent = text; $('dot').classList.toggle('on', !!on); }
+function setMsg(text, err) { $('msg').textContent = text; $('msg').classList.toggle('err', !!err); $('intro').hidden = false; }
+
+function onNotify(e) {
+  const v = new Uint8Array(e.target.value.buffer.slice(0));
+  const merged = new Uint8Array(buf.length + v.length);
+  merged.set(buf); merged.set(v, buf.length);
+  buf = merged;
+  for (;;) {
+    let i = -1;
+    for (let j = 0; j + 3 < buf.length; j++) {
+      if (buf[j] === 0xaa && buf[j + 1] === 0x55 && buf[j + 2] === 0xaa && buf[j + 3] === 0xff) { i = j; break; }
+    }
+    if (i < 0) { buf = buf.slice(Math.max(0, buf.length - 3)); return; }
+    if (buf.length - i < FRAME_LEN) { buf = buf.slice(i); return; }
+    const frame = buf.slice(i, i + FRAME_LEN);
+    buf = buf.slice(i + FRAME_LEN);
+    const d = parseFrame(frame);
+    if (d) { lastFrameAt = Date.now(); render(d); }
+  }
+}
+
+async function request() {
+  if (!chr) return;
+  try {
+    buf = new Uint8Array(0);
+    if (chr.writeValueWithResponse) await chr.writeValueWithResponse(STATUS_REQ);
+    else await chr.writeValue(STATUS_REQ);
+  } catch (err) { console.warn('write failed', err); }
+  if (lastFrameAt && Date.now() - lastFrameAt > 15000) setState('No data', false);
+}
+
+async function openLink() {
+  setState('Connecting…', false);
+  const server = await device.gatt.connect();
+  const svc = await server.getPrimaryService(SERVICE);
+  chr = await svc.getCharacteristic(CHAR);
+  chr.addEventListener('characteristicvaluechanged', onNotify);
+  await chr.startNotifications();
+  setState('Connected', true);
+  $('connect').textContent = 'Disconnect';
+  await request();
+  clearInterval(pollTimer);
+  pollTimer = setInterval(request, POLL_MS);
+}
+
+async function onDisconnected() {
+  clearInterval(pollTimer); chr = null;
+  setState('Disconnected', false);
+  $('connect').textContent = 'Connect';
+  if (!wantConnected) return;
+  for (let attempt = 1; attempt <= 3 && wantConnected; attempt++) {
+    setState(`Reconnecting (${attempt})…`, false);
+    try { await openLink(); return; } catch (err) { await new Promise(r => setTimeout(r, 2000)); }
+  }
+  wantConnected = false;
+  setState('Disconnected', false);
+  setMsg('Lost the connection. Tap Connect to try again.', true);
+}
+
+$('connect').addEventListener('click', async () => {
+  if (device && device.gatt.connected) {
+    wantConnected = false;
+    device.gatt.disconnect();
+    return;
+  }
+  if (!navigator.bluetooth) {
+    setMsg('This browser has no Web Bluetooth. On iPhone, open this page in the Bluefy browser.', true);
+    return;
+  }
+  $('connect').disabled = true;
+  try {
+    if (!device) {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'ANT-BLE' }, { services: [SERVICE] }],
+        optionalServices: [SERVICE],
+      });
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+    }
+    wantConnected = true;
+    await openLink();
+    $('intro').hidden = true;
+  } catch (err) {
+    setState('Disconnected', false);
+    if (err.name !== 'NotFoundError') setMsg('Could not connect: ' + err.message, true);
+  } finally {
+    $('connect').disabled = false;
+  }
+});
+
+// ---- Rendering ----
+function render(d) {
+  $('data').hidden = false;
+  const cells = d.cells;
+  const max = Math.max(...cells), min = Math.min(...cells);
+  const avg = cells.reduce((a, b) => a + b, 0) / cells.length;
+  const iMax = cells.indexOf(max), iMin = cells.indexOf(min);
+
+  $('pv').innerHTML = `${d.packV.toFixed(1)} <small>V</small>`;
+  $('soc').innerHTML = `${d.soc} <small>%</small>`;
+  $('cur').innerHTML = `${d.current.toFixed(1)} <small>A</small>`;
+  $('pwr').innerHTML = `${d.power} <small>W</small>`;
+  $('delta').innerHTML = `${Math.round((max - min) * 1000)} <small>mV</small>`;
+  $('cap').innerHTML = `${d.remainingAh.toFixed(1)} <small>/ ${d.capacityAh.toFixed(1)} Ah</small>`;
+
+  // Bars span 3.0–4.25 V so small imbalances stay visible without exaggeration.
+  const lo = 3.0, hi = 4.25;
+  $('cells').innerHTML = cells.map((v, i) => {
+    const pct = Math.max(2, Math.min(100, (v - lo) / (hi - lo) * 100));
+    const dev = Math.round((v - avg) * 1000);
+    const cls = i === iMax && max !== min ? 'hi' : i === iMin && max !== min ? 'lo' : '';
+    return `<div class="row ${cls}"><span class="n">${i + 1}</span><span class="mv">${v.toFixed(3)}</span>` +
+      `<div class="track"><div class="fill" style="width:${pct}%"></div></div>` +
+      `<span class="d">${dev > 0 ? '+' : dev < 0 ? '−' : '±'}${Math.abs(dev)}</span></div>`;
+  }).join('');
+
+  const fet = v => (v === 1 ? 'On' : `Off (${v})`);
+  const temps = d.temps.map((t, i) => (t > -40 ? `T${i + 1} <b>${t} °C</b>` : null)).filter(Boolean);
+  $('meta').innerHTML = [
+    `Avg <b>${avg.toFixed(3)} V</b>`,
+    `Max <b>#${iMax + 1}</b>`, `Min <b>#${iMin + 1}</b>`,
+    ...temps,
+    `Charge FET <b>${fet(d.chargeFet)}</b>`, `Discharge FET <b>${fet(d.dischargeFet)}</b>`,
+    `Balancer <b>${d.balancer}</b>`,
+    `Updated <b>${new Date().toLocaleTimeString()}</b>`,
+  ].map(s => `<span>${s}</span>`).join('');
+}
+</script>
+</body>
+</html>
