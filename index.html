@@ -99,7 +99,8 @@
 // ---- Legacy ANT BMS protocol ----
 // Write DB DB 00 00 00 00 to FFE1; the BMS replies with a 140-byte frame (AA 55 AA FF ...)
 // delivered as ~20-byte notifications. The BMS drops the link after ~30 s without a request.
-const SERVICE = 0xffe0, CHAR = 0xffe1;
+const SERVICE = '0000ffe0-0000-1000-8000-00805f9b34fb';
+const CHAR = '0000ffe1-0000-1000-8000-00805f9b34fb';
 const STATUS_REQ = new Uint8Array([0xdb, 0xdb, 0x00, 0x00, 0x00, 0x00]);
 const FRAME_LEN = 140, POLL_MS = 3000;
 
@@ -130,6 +131,7 @@ function parseFrame(f) {
 
 // ---- BLE ----
 let device = null, chr = null, pollTimer = null, buf = new Uint8Array(0), lastFrameAt = 0, wantConnected = false;
+let step = '';
 const $ = id => document.getElementById(id);
 
 function setState(text, on) { $('state').textContent = text; $('dot').classList.toggle('on', !!on); }
@@ -166,13 +168,18 @@ async function request() {
 
 async function openLink() {
   setState('Connecting…', false);
+  step = 'connecting';
   const server = await device.gatt.connect();
+  step = 'finding service FFE0';
   const svc = await server.getPrimaryService(SERVICE);
+  step = 'finding characteristic FFE1';
   chr = await svc.getCharacteristic(CHAR);
   chr.addEventListener('characteristicvaluechanged', onNotify);
+  step = 'subscribing to notifications';
   await chr.startNotifications();
   setState('Connected', true);
   $('connect').textContent = 'Disconnect';
+  step = 'sending first request';
   await request();
   clearInterval(pollTimer);
   pollTimer = setInterval(request, POLL_MS);
@@ -205,8 +212,9 @@ $('connect').addEventListener('click', async () => {
   $('connect').disabled = true;
   try {
     if (!device) {
+      step = 'choosing device';
       device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: 'ANT-BLE' }, { services: [SERVICE] }],
+        filters: [{ namePrefix: 'ANT-BLE' }],
         optionalServices: [SERVICE],
       });
       device.addEventListener('gattserverdisconnected', onDisconnected);
@@ -216,7 +224,8 @@ $('connect').addEventListener('click', async () => {
     $('intro').hidden = true;
   } catch (err) {
     setState('Disconnected', false);
-    if (err.name !== 'NotFoundError') setMsg('Could not connect: ' + err.message, true);
+    const detail = (err && (err.message || err.name)) || String(err);
+    if (!(err && err.name === 'NotFoundError')) setMsg(`Could not connect (${step}): ${detail}`, true);
   } finally {
     $('connect').disabled = false;
   }
